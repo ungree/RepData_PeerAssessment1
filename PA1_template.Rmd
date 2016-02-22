@@ -8,18 +8,178 @@ output:
 
 ## Loading and preprocessing the data
 
+### Loading Required Libraries
 
+```{r}
+library("knitr")
+library("ggplot2")
+library("plyr")
+```
+
+### Loading Activity Data
+
+```{r}
+activityData = read.csv("activity.csv")
+```
+
+### Addding Corresponding Days for Each Date in the Data
+
+```{r}
+activityData$days = weekdays(as.Date(activityData$date,format = "%Y-%m-%d"))
+```
 
 ## What is mean total number of steps taken per day?
 
+### Daily Average and Median Steps
 
+#### Daily Average Steps
+
+```{r, results = 'asis'}
+dailyAverage = ddply(activityData, .(date), summarise, steps = mean(steps))
+dailyAverage$date = as.Date(dailyAverage$date,format = "%Y-%m-%d")
+knitr::kable(dailyAverage)
+```
+
+#### Daily Median Steps
+
+```{r}
+dailyMedian = ddply(activityData, .(date), summarise, steps = median(steps))
+dailyMedian$date = as.Date(dailyMedian$date,format = "%Y-%m-%d")
+knitr::kable(dailyMedian)
+```
+
+### Plotting Daily Average Steps Histogram
+
+```{r}
+g = ggplot(dailyAverage, aes(date,steps))
+g + geom_bar(stat = 'identity', position = 'dodge') +
+        scale_x_date(date_breaks = "1 week", date_labels = "%b %d", date_minor_breaks = "1 day") +
+        labs(x = 'Date') + 
+        labs(y = 'Average Steps') +
+        labs(title = 'Daily Average Steps')
+```
 
 ## What is the average daily activity pattern?
 
+### Time Series Plot of Interval and the Average Number of Steps Taken, Averaged Across all Days
 
+```{r}
+intAvg = ddply(na.omit(activityData), .(interval), summarise, steps = mean(steps))
+
+g = ggplot(intAvg, aes(x = interval, y = steps))
+g + geom_line(size = 0.7) + 
+    labs(x = 'Interval') + 
+    labs(y = 'Average Steps Across all Days') +
+    labs(title = 'Average Steps for 5 Min. Intervals Across all Days')
+```
+    
+### Interval, on Average Across all Days, Containing Maximum Number of Steps
+
+```{r}
+intAvg$interval[which.max(intAvg$steps)]
+```
 
 ## Imputing missing values
 
+### Total Number of Missing Values in the Dataset
 
+```{r}
+sum(is.na(activityData$steps)==TRUE)
+```
+
+### Imputing Missing Data
+
+Imputing missing values using 5-minute interval average across all days for which data is available.
+
+```{r}
+impActData = activityData
+
+for(i in 1:nrow(impActData)){
+        
+        if(is.na(impActData[i,1])){
+                
+                impActData[i,1] = intAvg$steps[which(intAvg$interval == impActData$interval[i])]
+                
+        }
+        
+}
+```
+
+### Daily Average and Median Steps
+
+```{r}
+dailyImpAverage = ddply(impActData, .(date), summarise, steps = mean(steps))
+dailyImpAverage$date = as.Date(dailyImpAverage$date,format = "%Y-%m-%d")
+knitr::kable(dailyImpAverage)
+```
+
+### Daily Median Steps
+
+```{r}
+dailyImpMedian = ddply(impActData, .(date), summarise, steps = median(steps))
+dailyImpMedian$date = as.Date(dailyImpMedian$date,format = "%Y-%m-%d")
+knitr::kable(dailyImpMedian)
+```
+
+### Plotting Daily Average Steps Histogram for Imputed Data
+
+```{r}
+g = ggplot(dailyAverage, aes(date,steps))
+g + geom_bar(stat = 'identity', position = 'dodge') +
+        scale_x_date(date_breaks = "1 week", date_labels = "%b %d", date_minor_breaks = "1 day") +
+        labs(x = 'Date') + 
+        labs(y = 'Average Steps') +
+        labs(title = 'Daily Average Steps')
+```
+
+### Difference Between Imputed and Actual Data
+
+Based on the tables provided in the next subsections, there is no difference between the imputed and actual data.
+
+#### Difference in Average Values
+
+```{r}
+diffData = dailyAverage
+diffData$steps = NULL
+
+diffData$`Difference Between Imputed and Actual Data` = abs(dailyImpAverage$steps - dailyAverage$steps)
+knitr::kable(na.omit(diffData))
+```
+
+#### Difference in Median Values
+
+```{r}
+diffData$date = dailyAverage$date
+diffData$`Difference Between Imputed and Actual Data` = abs(dailyImpAverage$steps - dailyAverage$steps)
+knitr::kable(na.omit(diffData))
+```
 
 ## Are there differences in activity patterns between weekdays and weekends?
+
+### Creating Weekday and Weekend Data
+
+```{r}
+days = c("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
+
+weekdayData = impActData[impActData$days %in% days[1:5],]
+weekendData = impActData[impActData$days %in% days[6:7],]
+
+weekdayAvg = ddply(weekdayData, .(interval), summarise, steps = mean(steps))
+weekdayAvg$day = "Weekday"
+
+weekendAvg = ddply(weekendData, .(interval), summarise, steps = mean(steps))
+weekendAvg$day = "Weekend"
+
+avgDayActivityData = rbind(weekdayAvg,weekendAvg)
+```
+
+### Plotting Weekday and Weekend Panel Plots
+
+```{r}
+g = ggplot(avgDayActivityData, aes(x=interval,y=steps))
+g + geom_line(size=0.7)+
+    labs(x = 'Time Interval (minutes)') + 
+    labs(y = 'Average Steps') +
+    labs(title = 'Average Steps')+
+    facet_grid(day~.)
+```
